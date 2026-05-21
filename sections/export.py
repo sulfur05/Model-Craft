@@ -234,3 +234,113 @@ def _save_current_model_ui() -> None:
                 st.download_button("Download full PDF report", data=pdf_bytes,  file_name="modelcraft_report.pdf", mime="application/pdf")
         except Exception as exc:
             st.error(f"Could not generate PDF: {exc}")
+
+
+def _load_saved_bundle_ui() -> None:
+    st.subheader("Load existing model bundle")
+    uploaded_bundle = st.file_uploader("Upload a saved model bundle (.joblib or .pkl)", type=["joblib","pkl"])
+    if uploaded_bundle is not None:
+        if st.button("Load uploaded bundle"):
+            try:
+                with st.spinner("Loading bundle..."):
+                    bundle = load_model_bundle(uploaded_bundle, persist_to_session=True)
+                st.session_state["loaded_bundle"] = bundle
+                st.success("Model bundle loaded successfully.")
+                _display_bundle_summary(bundle)
+            except Exception as exc:
+                st.error(f"Could not load bundle: {exc}")
+
+    st.markdown("---")
+    st.write("Saved model registry")
+    try:
+        registry_df = list_saved_models()
+        if registry_df.empty:
+            st.info("No saved models found in the exports folder.")
+        else:
+            cols_to_show = ["trained_model_name","version","created_at","task_type","target_column","feature_count","bundle_path"]
+            st.dataframe(registry_df[cols_to_show])
+            selected_index = st.selectbox(
+                "Select a saved model to inspect",
+                options=list(range(len(registry_df))),
+                format_func=lambda i: f"{registry_df.iloc[i]['trained_model_name']} | {registry_df.iloc[i]['version']} | {registry_df.iloc[i]['created_at']}"
+            )
+            if st.button("Load selected model from registry"):
+                try:
+                    bundle_path = Path(registry_df.iloc[selected_index]["bundle_path"])
+                    bundle = load_model_bundle(bundle_path, persist_to_session=True)
+                    st.session_state["loaded_bundle"] = bundle
+                    st.success("Selected bundle loaded successfully.")
+                    _display_bundle_summary(bundle)
+                except Exception as exc:
+                    st.error(f"Could not load selected bundle: {exc}")
+    except Exception as exc:
+        st.warning(f"Could not read saved model registry: {exc}")
+
+def _batch_prediction_ui() -> None:
+    st.subheader("Batch prediction")
+    if "trained_model" not in st.session_state or "preprocessor" not in st.session_state:
+        st.info("Load a saved bundle or train a model first.")
+        return
+
+    bundle = {
+        "model": st.session_state.get("trained_model"),
+        "preprocessor": st.session_state.get("preprocessor"),
+        "feature_columns": st.session_state.get("feature_columns", []),
+        "target_column": st.session_state.get("target_column"),
+        "task_type": st.session_state.get("task_type", "classification"),
+        "trained_model_name": st.session_state.get("trained_model_name", "trained_model"),
+        "created_at": st.session_state.get("created_at", ""),
+        "version": st.session_state.get("version", ""),
+        "dataset_shape": st.session_state.get("dataset_shape"),
+        "metrics": st.session_state.get("trained_model_metrics", {}),
+        "library_versions": st.session_state.get("library_versions", {}),
+    }
+
+    try:
+        validate_model_bundle(bundle)
+    except Exception:
+        pass
+
+    uploaded_csv = st.file_uploader("Upload CSV for prediction", type=["csv"], key="batch_csv_uploader")
+    include_proba = st.checkbox("Include class probabilities when available", value=True)
+    if uploaded_csv is None:
+        return
+
+    try:
+        input_df = pd.read_csv(uploaded_csv)
+    except Exception as exc:
+        st.error(f"Could not read uploaded CSV: {exc}")
+        return
+
+    st.write("Preview of uploaded data")
+    st.dataframe(input_df.head())
+
+    expected_columns = st.session_state.get("feature_columns", [])
+    if expected_columns:
+        missing = [col for col in expected_columns if col not in input_df.columns]
+        if missing:
+            st.error("Missing required columns: " + ", ".join(missing))
+            return
+
+    if st.button("Run batch prediction"):
+        try:
+            with st.spinner("Generating predictions..."):
+                result_df = predict_with_bundle(bundle=bundle, input_df=input_df, include_proba=include_proba)
+            st.session_state["last_prediction_result"] = result_df
+            st.success("Predictions generated successfully.")
+            st.dataframe(result_df.head())
+            csv_bytes = result_df.to_csv(index=False).encode("utf-8")
+            st.download_button(label="Download predictions as CSV", data=csv_bytes, file_name="predictions.csv", mime="text/csv")
+        except Exception as exc:
+            st.error(f"Batch prediction failed: {exc}")
+
+def export_section() -> None:
+    with st.expander("6. Model Export & Management"):
+        st.write("Save the trained model together with its preprocessing pipeline, reload old versions, and run predictions on new CSV files.")
+        tab_save, tab_load, tab_batch = st.tabs(["Save current model", "Load model bundle", "Batch prediction"])
+        with tab_save:
+            _save_current_model_ui()
+        with tab_load:
+            _load_saved_bundle_ui()
+        with tab_batch:
+            _batch_prediction_ui()
