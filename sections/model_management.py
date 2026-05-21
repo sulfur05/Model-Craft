@@ -209,3 +209,98 @@ def restore_bundle_to_session(bundle: Dict[str, Any]) -> None:
 
     if bundle.get("comparison_results") is not None:
         st.session_state["model_comparison_results"] = bundle["comparison_results"]
+
+
+def list_saved_models(root: Union[str, Path] = EXPORT_ROOT) -> pd.DataFrame:
+    """
+    Return a registry table of saved model bundles found under the export directory.
+    """
+    root_path = Path(root)
+    rows = []
+
+    if not root_path.exists():
+        return pd.DataFrame(
+            columns=[
+                "trained_model_name",
+                "version",
+                "created_at",
+                "task_type",
+                "target_column",
+                "feature_count",
+                "bundle_path",
+            ]
+        )
+
+    for metadata_file in root_path.glob("*/*/metadata.json"):
+        try:
+            metadata = json.loads(metadata_file.read_text(encoding="utf-8"))
+            rows.append(metadata)
+        except Exception:
+            continue
+
+    if not rows:
+        return pd.DataFrame(
+            columns=[
+                "trained_model_name",
+                "version",
+                "created_at",
+                "task_type",
+                "target_column",
+                "feature_count",
+                "bundle_path",
+            ]
+        )
+
+    df = pd.DataFrame(rows)
+    sort_cols = [col for col in ["created_at", "trained_model_name", "version"] if col in df.columns]
+    if sort_cols:
+        df = df.sort_values(sort_cols, ascending=False).reset_index(drop=True)
+    return df
+
+
+def _align_input_columns(df: pd.DataFrame, expected_columns: Iterable[str]) -> pd.DataFrame:
+    """
+    Reorder and validate incoming batch prediction data to match training schema.
+    """
+    expected_columns = list(expected_columns)
+    missing = [col for col in expected_columns if col not in df.columns]
+    if missing:
+        raise ValueError("Missing required input columns: " + ", ".join(missing))
+
+    aligned = df.copy()
+    aligned = aligned[expected_columns]
+    return aligned
+
+
+def predict_with_bundle(
+    bundle: Dict[str, Any],
+    input_df: pd.DataFrame,
+    include_proba: bool = True,
+) -> pd.DataFrame:
+    """
+    Run batch prediction using a loaded bundle.
+
+    Returns the original data plus prediction columns.
+    """
+    validate_model_bundle(bundle)
+
+    model = bundle["model"]
+    preprocessor = bundle["preprocessor"]
+    expected_columns = bundle["feature_columns"]
+    task_type = bundle.get("task_type", "classification")
+
+    aligned_df = _align_input_columns(input_df, expected_columns)
+    transformed = preprocessor.transform(aligned_df)
+
+    output = input_df.copy()
+    predictions = model.predict(transformed)
+    output["prediction"] = predictions
+
+    if task_type == "classification" and include_proba and hasattr(model, "predict_proba"):
+        proba = model.predict_proba(transformed)
+        classes = list(getattr(model, "classes_", []))
+        if len(classes) == proba.shape[1]:
+            for idx, class_label in enumerate(classes):
+                output[f"proba_{class_label}"] = proba[:, idx]
+
+    return output
