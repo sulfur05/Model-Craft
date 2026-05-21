@@ -131,3 +131,81 @@ def validate_model_bundle(bundle: Dict[str, Any]) -> None:
 
     if not isinstance(bundle["trained_model_name"], str):
         raise TypeError("bundle['trained_model_name'] must be a string.")
+
+def save_model_bundle(
+    model_name: Optional[str] = None,
+    version: Optional[str] = None,
+    root: Union[str, Path] = EXPORT_ROOT,
+) -> Dict[str, Any]:
+    """
+    Save the current trained model + preprocessor bundle to disk.
+
+    Returns a dictionary containing the saved paths and metadata.
+    """
+    bundle = build_model_bundle(model_name=model_name, version=version)
+    validate_model_bundle(bundle)
+
+    export_dir = _ensure_export_dir(bundle["trained_model_name"], bundle["version"], root=root)
+    bundle_path = export_dir / BUNDLE_FILENAME
+    metadata_path = export_dir / METADATA_FILENAME
+
+    joblib.dump(bundle, bundle_path)
+
+    metadata = {
+        "trained_model_name": bundle["trained_model_name"],
+        "version": bundle["version"],
+        "created_at": bundle["created_at"],
+        "task_type": bundle["task_type"],
+        "target_column": bundle["target_column"],
+        "dataset_shape": bundle["dataset_shape"],
+        "feature_count": len(bundle["feature_columns"]),
+        "metrics": bundle["metrics"],
+        "params": bundle["params"],
+        "bundle_path": str(bundle_path),
+    }
+
+    metadata_path.write_text(json.dumps(metadata, indent=2), encoding="utf-8")
+
+    return {
+        "bundle": bundle,
+        "bundle_path": bundle_path,
+        "metadata_path": metadata_path,
+        "export_dir": export_dir,
+    }
+
+
+def load_model_bundle(
+    source: Union[str, Path, Any],
+    persist_to_session: bool = True,
+) -> Dict[str, Any]:
+    """
+    Load a previously saved model bundle.
+
+    `source` can be a file path or a file-like object, including Streamlit's UploadedFile.
+    """
+    bundle = joblib.load(source)
+    validate_model_bundle(bundle)
+
+    if persist_to_session:
+        restore_bundle_to_session(bundle)
+
+    return bundle
+
+
+def restore_bundle_to_session(bundle: Dict[str, Any]) -> None:
+    """Put a loaded bundle back into Streamlit session_state so the app can use it immediately."""
+    st.session_state["trained_model"] = bundle["model"]
+    st.session_state["preprocessor"] = bundle["preprocessor"]
+    st.session_state["feature_columns"] = list(bundle["feature_columns"])
+    st.session_state["target_column"] = bundle.get("target_column")
+    st.session_state["task_type"] = bundle.get("task_type", "classification")
+    st.session_state["trained_model_name"] = bundle.get(
+        "trained_model_name",
+        type(bundle["model"]).__name__,
+    )
+
+    if bundle.get("metrics") is not None:
+        st.session_state["trained_model_metrics"] = bundle["metrics"]
+
+    if bundle.get("comparison_results") is not None:
+        st.session_state["model_comparison_results"] = bundle["comparison_results"]
