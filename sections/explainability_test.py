@@ -51,7 +51,52 @@ def _prepare_shap_input(preprocessor, X_train):
     X_train_proc = pd.DataFrame(X_train_proc, columns=feature_names)
     return X_train_proc
 
-    def _select_positive_class(shap_values):
+def _select_positive_class(shap_values):
     if hasattr(shap_values, "values") and shap_values.values.ndim == 3:
         return shap_values[..., 1]
     return shap_values
+
+def explainability_section():
+    with st.expander("5. Explainability section"):
+        if "trained_model" not in st.session_state:
+            st.info("No trained model in session_state")
+            return
+
+        if "preprocessor" not in st.session_state or "X_train" not in st.session_state:
+            st.info("Run preprocessing before using explainability.")
+            return
+
+        model = st.session_state["trained_model"]
+        st.write("Model type:", type(model).__name__)
+
+        X_train = st.session_state["X_train"]
+        preprocessor = st.session_state["preprocessor"]
+        X_train_proc = _prepare_shap_input(preprocessor, X_train)
+
+        if _is_linear_model(model):
+            explainer = sp.LinearExplainer(model, X_train_proc)
+            shap_values = explainer(X_train_proc)
+
+        elif _is_tree_model(model):
+            explainer = sp.TreeExplainer(model)
+            shap_values = explainer(X_train_proc)
+
+        else:
+            explainer = sp.Explainer(model, X_train_proc)
+            shap_values = explainer(X_train_proc)
+
+        if _is_classifier_model(model):
+            shap_values = _select_positive_class(shap_values)
+
+        st.subheader("Global feature importance")
+        fig1 = plt.figure(figsize=(8, 5))
+        sp.plots.bar(shap_values, max_display=15, show=False)
+        st.pyplot(fig1, clear_figure=True)
+
+        st.subheader("Feature impact distribution")
+        fig2 = plt.figure(figsize=(8, 5))
+        sp.plots.beeswarm(shap_values, max_display=15, show=False)
+        st.pyplot(fig2, clear_figure=True)
+
+
+explainability_section()
