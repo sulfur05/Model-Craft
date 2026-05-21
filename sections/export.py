@@ -48,3 +48,131 @@ def _display_bundle_summary(bundle: dict) -> None:
             st.dataframe(bundle["comparison_results"])
         except Exception:
             st.write(bundle["comparison_results"])
+
+
+def _gather_full_report_artifacts(bundle: dict):
+    eda_figs = []
+    shap_figs = []
+    ds_text = None
+    preprocessing_summary = None
+    model_params = None
+    model_metrics = None
+    comparison_df = bundle.get("comparison_results")
+    confusion_fig = None
+    pred_vs_actual_fig = None
+    sample_predictions = None
+
+    df = st.session_state.get("dataset")
+    if df is not None:
+        ds_text = f"Rows: {df.shape[0]}, Columns: {df.shape[1]}. Columns: {list(df.columns)[:15]}{' ...' if df.shape[1]>15 else ''}."
+        # missing values plot
+        missing = df.isna().sum()
+        missing = missing[missing > 0].sort_values(ascending=False)
+        if not missing.empty:
+            fig, ax = plt.subplots(figsize=(6,3))
+            missing.plot(kind="bar", ax=ax)
+            ax.set_title("Missing values by column")
+            eda_figs.append(fig)
+        # a few histograms and boxplots (limit to 3)
+        numeric = st.session_state.get("numeric_columns", [])[:3]
+        for col in numeric:
+            fig, ax = plt.subplots(figsize=(5,3))
+            df[col].dropna().hist(ax=ax, bins=30)
+            ax.set_title(f"Histogram: {col}")
+            eda_figs.append(fig)
+            # boxplot
+            fig2, ax2 = plt.subplots(figsize=(5,2))
+            ax2.boxplot(df[col].dropna())
+            ax2.set_title(f"Boxplot: {col}")
+            eda_figs.append(fig2)
+        # correlation heatmap (small)
+        numeric_all = st.session_state.get("numeric_columns", [])
+        if len(numeric_all) >= 2:
+            sample = df[numeric_all].sample(min(len(df), 2000), random_state=0)
+            corr = sample.corr()
+            fig, ax = plt.subplots(figsize=(6,6))
+            import seaborn as sns
+            sns.heatmap(corr, cmap="coolwarm", center=0, ax=ax)
+            ax.set_title("Correlation heatmap")
+            eda_figs.append(fig)
+
+    # preprocessing summary
+    preprocessor = st.session_state.get("preprocessor")
+    if preprocessor is not None:
+        try:
+            preprocessing_summary = str(preprocessor)
+        except Exception:
+            preprocessing_summary = "Preprocessor present; details unavailable."
+
+    # model params and metrics
+    model = st.session_state.get("trained_model")
+    if model is not None:
+        if hasattr(model, "get_params"):
+            try:
+                model_params = model.get_params()
+            except Exception:
+                model_params = None
+    model_metrics = st.session_state.get("trained_model_metrics") or bundle.get("metrics")
+
+    # diagnostic plots from training step if available in session state (or recompute)
+    # confusion matrix or pred vs actual may not be saved - try to generate small versions if possible
+    last_y_test = st.session_state.get("y_test")
+    last_y_pred = None
+    try:
+        if "trained_model" in st.session_state and last_y_test is not None:
+            model = st.session_state["trained_model"]
+            X_test = st.session_state.get("X_test")
+            pre = st.session_state.get("preprocessor")
+            X_test_proc = pre.transform(X_test)
+            last_y_pred = model.predict(X_test_proc)
+            # confusion for classification
+            if st.session_state.get("task_type") == "classification":
+                from sklearn.metrics import confusion_matrix
+                cm = confusion_matrix(last_y_test, last_y_pred)
+                fig, ax = plt.subplots(figsize=(4,3))
+                import seaborn as sns
+                sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", ax=ax)
+                ax.set_title("Confusion matrix (test set)")
+                confusion_fig = fig
+            else:
+                # regression pred vs actual
+                fig, ax = plt.subplots(figsize=(5,4))
+                ax.scatter(last_y_test, last_y_pred, alpha=0.6)
+                ax.plot([min(last_y_test), max(last_y_test)], [min(last_y_test), max(last_y_test)], "r--")
+                ax.set_title("Predicted vs Actual (test set)")
+                ax.set_xlabel("True")
+                ax.set_ylabel("Pred")
+                pred_vs_actual_fig = fig
+    except Exception:
+        pass
+
+    # SHAP figs (try to reuse session shap values)
+    shap_vals = st.session_state.get("_shap_values")
+    if shap_vals is not None:
+        try:
+            fig = plt.figure(figsize=(7,4))
+            shap.plots.bar(shap_vals, max_display=15, show=False)
+            shap_figs.append(fig)
+        except Exception:
+            pass
+
+    # Sample predictions: take a few rows from X_test if available
+    if last_y_pred is not None and "X_test" in st.session_state:
+        X_test = st.session_state["X_test"].copy()
+        X_test = X_test.reset_index(drop=True)
+        preds = list(last_y_pred)[:10]
+        sample_predictions = X_test.head(len(preds)).copy()
+        sample_predictions["prediction"] = preds
+
+    return {
+        "eda_figs": eda_figs,
+        "shap_figs": shap_figs,
+        "dataset_text": ds_text,
+        "preprocessing_summary": preprocessing_summary,
+        "model_params": model_params,
+        "model_metrics": model_metrics,
+        "comparison_df": comparison_df,
+        "confusion_fig": confusion_fig,
+        "pred_vs_actual_fig": pred_vs_actual_fig,
+        "sample_predictions": sample_predictions,
+    }
