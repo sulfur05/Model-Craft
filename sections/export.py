@@ -176,3 +176,61 @@ def _gather_full_report_artifacts(bundle: dict):
         "pred_vs_actual_fig": pred_vs_actual_fig,
         "sample_predictions": sample_predictions,
     }
+
+
+def _save_current_model_ui() -> None:
+    st.subheader("Save current model")
+    if "trained_model" not in st.session_state:
+        st.info("Train a model first before exporting it.")
+        return
+
+    default_name = st.session_state.get("trained_model_name", "trained_model")
+    model_name = st.text_input("Model name", value=default_name)
+    version = st.text_input("Version (optional)", value="")
+
+    if st.button("Save model bundle"):
+        try:
+            with st.spinner("Saving model bundle..."):
+                result = save_model_bundle(model_name=model_name, version=version.strip() or None)
+            bundle_path = result["bundle_path"]
+            bundle = result["bundle"]
+            st.success(f"Model saved to: {bundle_path}")
+            st.session_state["last_saved_bundle_path"] = str(bundle_path)
+            st.session_state["last_saved_bundle"] = bundle
+            try:
+                bundle_bytes = bundle_path.read_bytes()
+                st.download_button(
+                    label="Download model bundle",
+                    data=bundle_bytes,
+                    file_name=bundle_path.name,
+                    mime="application/octet-stream",
+                )
+            except Exception:
+                st.warning("Saved on disk, but download button unavailable.")
+        except Exception as exc:
+            st.error(f"Could not save model bundle: {exc}")
+
+    st.markdown("---")
+    st.write("Generate a full PDF report (dataset, EDA, model, SHAP)")
+
+    if st.button("Generate PDF report"):
+        try:
+            with st.spinner("Generating PDF report..."):
+                bundle = st.session_state.get("last_saved_bundle") or   build_model_bundle()
+                artifacts = _gather_full_report_artifacts(bundle)
+                pdf_bytes = create_pdf_report_bytes(
+                    bundle=bundle,
+                    dataset_summary_text=artifacts["dataset_text"],
+                    eda_figs=artifacts["eda_figs"],
+                    shap_figs=artifacts["shap_figs"],
+                    preprocessing_summary=artifacts["preprocessing_summary"],
+                    model_params=artifacts["model_params"],
+                    model_metrics=artifacts["model_metrics"],
+                    comparison_df=artifacts["comparison_df"],
+                    confusion_fig=artifacts["confusion_fig"],
+                    pred_vs_actual_fig=artifacts["pred_vs_actual_fig"],
+                    sample_predictions=artifacts["sample_predictions"],
+                )
+                st.download_button("Download full PDF report", data=pdf_bytes,  file_name="modelcraft_report.pdf", mime="application/pdf")
+        except Exception as exc:
+            st.error(f"Could not generate PDF: {exc}")
