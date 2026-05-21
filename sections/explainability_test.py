@@ -50,3 +50,8 @@ def _prepare_shap_input(preprocessor, X_train):
 
     X_train_proc = pd.DataFrame(X_train_proc, columns=feature_names)
     return X_train_proc
+
+    def _select_positive_class(shap_values):
+    if hasattr(shap_values, "values") and shap_values.values.ndim == 3:
+        return shap_values[..., 1]
+    return shap_values
