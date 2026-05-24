@@ -37,6 +37,19 @@ def _hist_modality(arr: np.ndarray, bins: int = 30) -> str:
         return "may be bimodal"
     return "appears multimodal"
 
+def _outlier_stats(arr: np.ndarray) -> (int, float):
+    arr = arr[~np.isnan(arr)]
+    if arr.size == 0:
+        return 0, 0.0
+    q1 = np.percentile(arr, 25)
+    q3 = np.percentile(arr, 75)
+    iqr = q3 - q1
+    if iqr == 0:
+        return 0, 0.0
+    lower = q1 - 1.5 * iqr
+    upper = q3 + 1.5 * iqr
+    outliers = ((arr < lower) | (arr > upper)).sum()
+    return int(outliers), float(outliers / arr.size)
 
 def show_plot_insight(title: str, insight: str) -> None:
     st.markdown(f"**{title}:** {insight}")
@@ -190,11 +203,70 @@ def dataset_eda(df: pd.DataFrame, numeric_cols, categorical_cols):
                 st.write(f"Skewness (Pearson): {skew:.3f}")
                 st.write(f"Modality assessment: {modality}")
 
+#-- boxplots --
+        st.subheader("Boxplots (outlier inspection)")
+        box_cols = st.multiselect(
+            "Select numeric columns for boxplots",
+            options=numeric_cols,
+            default=default_numeric,
+            key="boxplot_columns",
+        )
+        for col in box_cols:
+            arr = df_sample[col].dropna().to_numpy(dtype=float)
+            fig, ax = plt.subplots()
+            sns.boxplot(x=arr, ax=ax)
+            ax.set_title(f"Boxplot of {col}")
+            st.pyplot(fig)
 
+            outliers, outlier_pct = _outlier_stats(arr)
+            if outliers == 0:
+                intuition = f"No strong outliers detected in {col}."
+            else:
+                intuition = (
+                    f"There are {outliers} values that differ noticeably from the bulk of {col} ({outlier_pct:.1%}). "
+                    "Inspect those rows — they may be data errors or rare but valid cases."
+                )
+            show_plot_insight("Interpretation", intuition)
 
+            with st.expander("Click for mathematical interpretation"):
+                st.write(f"Outliers by 1.5*IQR rule: {outliers}")
+                st.write(f"Outlier share: {outlier_pct:.3f}")
+
+    if len(numeric_cols) >= 2:
+            st.subheader("Correlation heatmap (numeric columns)")
+            corr = df_sample[numeric_cols].corr()
+            fig, ax = plt.subplots(
+                figsize=(
+                    min(0.6 * len(numeric_cols), 6),
+                    min(0.6 * len(numeric_cols), 6),
+                )
+            )
+            sns.heatmap(corr, cmap="coolwarm", center=0, ax=ax)
+            ax.set_title("Correlation heatmap")
+            st.pyplot(fig)
+
+            corr_pairs = (
+                corr.abs()
+                .where(np.triu(np.ones(corr.shape), k=1).astype(bool))
+                .stack()
+                .sort_values(ascending=False)
+            )
+            strong = corr_pairs[corr_pairs >= 0.7]
+            if not strong.empty:
+                pairs = [f"{a} & {b} ({r:.2f})" for (a, b), r in strong.items()]
+                intuition = (
+                    f"Some features show strong linear relationships: {', '.join(pairs)}. "
+                    "Consider removing or combining redundant columns."
+                )
+            else:
+                intuition = "No very strong linear correlations detected between numeric features."
+            show_plot_insight("Interpretation", intuition)
+
+            with st.expander("Click for mathematical interpretation"):
+                st.write("Top absolute correlation pairs:")
+                for (a, b), r in corr_pairs.head(10).items():
+                    st.write(f"- {a} & {b}: {r:.3f}")
     
-
-
 def dataset_not_available():
     st.info("Upload a dataset in step 1 (Dataset Upload) first.")
     return
