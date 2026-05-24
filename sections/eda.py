@@ -24,6 +24,11 @@ def dataset_eda(df: pd.DataFrame, numeric_cols, categorical_cols):
 
 
     #below code will work on giving numeric summary
+    if numeric_cols:
+        st.markdown("**Numeric columns summary**")
+        st.dataframe(df[numeric_cols].describe().T)
+    else:
+        st.write("No numeric columns detected.")
 
 def dataset_not_available():
     st.info("Upload a dataset in step 1 (Dataset Upload) first.")
