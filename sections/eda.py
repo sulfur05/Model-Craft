@@ -172,6 +172,24 @@ def dataset_eda(df: pd.DataFrame, numeric_cols, categorical_cols):
             skew = _skewness(arr)
             modality = _hist_modality(arr)
 
+            
+            if abs(skew) < 0.5:
+                skew_msg = "looks fairly symmetric"
+            elif skew > 0:
+                skew_msg = "leans right (longer tail to larger values)"
+            else:
+                skew_msg = "leans left (longer tail to smaller values)"
+            
+            intuition = (
+                f"The distribution of {col} {skew_msg}. {modality}. "
+                "If needed, consider simple transforms (log) or scaling before modeling."
+            )
+            show_plot_insight("Interpretation", intuition)
+
+            with st.expander("Click for mathematical interpretation"):
+                st.write(f"Skewness (Pearson): {skew:.3f}")
+                st.write(f"Modality assessment: {modality}")
+
 
 
     
