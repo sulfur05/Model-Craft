@@ -6,6 +6,80 @@ import pandas as pd
 from dotenv import load_dotenv
 load_dotenv()
 
+def _build_context_summary() -> str:
+    """Summarize current state (dataset, target, task, model) for the LLM."""
+    parts = []
+
+    df: pd.DataFrame | None = st.session_state.get("dataset")
+    if df is not None:
+        parts.append(
+            f"Dataset: {df.shape[0]} rows, {df.shape[1]} columns. "
+            f"Columns: {list(df.columns)[:10]}{' ...' if df.shape[1] > 10 else ''}."
+        )
+
+    target = st.session_state.get("target_column")
+    task_type = st.session_state.get("task_type")
+    if target:
+        parts.append(f"Target column: {target}.")
+    if task_type:
+        parts.append(f"Problem type: {task_type}.")
+
+    if "preprocessor" in st.session_state:
+        parts.append("Preprocessing: a ColumnTransformer pipeline is configured.")
+
+    model_name = st.session_state.get("trained_model_name")
+    if model_name:
+        parts.append(f"Model: {model_name} has been trained.")
+
+    if not parts:
+        return "No dataset or model is loaded yet."
+
+    return " ".join(parts)
+
+def _call_llm(prompt: str) -> str:
+    """
+    Call a backend LLM.
+
+    For now this is a simple placeholder. You can:
+    - Plug in a free hosted API (e.g. Groq) using an API key in an env var.
+    - Or use a local server (e.g. ollama / llama.cpp) and POST to http://localhost.
+
+    Replace this body when you pick a backend.
+    """
+
+    # Example sketch for a Groq-like API (commented out so code runs without it):
+    #
+    api_key = os.getenv("GROQ_API_KEY")
+    if not api_key:
+        return (
+            "I don't have access to an LLM API yet. "
+            "Set GROQ_API_KEY in your environment to enable live answers."
+        )
+    
+    import requests
+    resp = requests.post(
+        "https://api.groq.com/openai/v1/chat/completions",
+        headers={"Authorization": f"Bearer {api_key}"},
+        json={
+            "model": "llama-3.3-70b-versatile",
+            "messages": [{"role": "user", "content": prompt}],
+        },
+        timeout=30,
+    )
+    
+    resp.raise_for_status()
+    data = resp.json()
+    return data["choices"][0]["message"]["content"]
+
+    # Placeholder answer so UI works even without a backend:
+    return (
+        "I am a placeholder advisor. Right now I don't call a real LLM, "
+        "but I can still remind you of the steps:\n\n"
+        "- Upload a dataset and pick the target.\n"
+        "- Run EDA to understand distributions and missing values.\n"
+        "- Configure preprocessing and split train/test.\n"
+        "- Train one or more models and compare their performance."
+    )
 
 def advisor_panel():
     """Right-hand side advisor panel with chat-like interaction."""
