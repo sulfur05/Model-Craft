@@ -58,21 +58,66 @@ def dataset_eda(df: pd.DataFrame, numeric_cols, categorical_cols):
 
     #intuitive interpretation
 
-    if df[cat_col].size > 0:
-        if share > 0.75:
-            intuition = (
-                    f"Most rows ({share:.0%}) belong to '{top}'. The model may learn this category easily — "
-                    "but check for imbalance before training."
-                )
-        elif unique > 30:
+        if df[cat_col].size > 0:
+            if share > 0.75:
                 intuition = (
-                    f"There are many different values ({unique}) in {cat_col}. Consider grouping rare values."
-                )
-        else:
-            intuition = f"Top category is '{top} ' ({share:.0%}). Watch for classimbalance."
-        
-        show_plot_insight("Interpretation",intuition)
+                        f"Most rows ({share:.0%}) belong to '{top}'. The model may learn this category easily — "
+                        "but check for imbalance before training."
+                    )
+            elif unique > 30:
+                    intuition = (
+                        f"There are many different values ({unique}) in {cat_col}. Consider grouping rare values."
+                    )
+            else:
+                intuition = f"Top category is '{top} ' ({share:.0%}). Watch for classimbalance."
 
+            show_plot_insight("Interpretation",intuition)
+
+            with st.expander("Click for mathematical interpretation"):
+                    st.write(f"Top category: `{top}`")
+                    st.write(f"Share of rows: {share:.3f}")
+                    st.write(f"Unique non-null categories: {unique}")
+    
+    st.markdown("---")
+    st.subheader("Missing values")
+
+    missing = df.isna().sum()
+    missing = missing[missing > 0].sort_values(ascending=False)
+    
+    if missing.empty:
+        st.write("No missing values detected.")
+        show_plot_insight("Interpretation", "No missing values detected — no imputation needed.")
+    else:
+        fig, ax = plt.subplots()
+        missing.plot(kind="bar", ax=ax)
+        ax.set_ylabel("Number of missing values")
+        ax.set_title("Missing values by column")
+        plt.xticks(rotation=45, ha="right")
+        st.pyplot(fig)
+
+        pct_missing = (missing / len(df)).sort_values(ascending=False)
+        high_missing = pct_missing[pct_missing > 0.2].index.tolist()
+        moderate_missing = pct_missing[(pct_missing > 0.05) & (pct_missing <= 0.2)].index.tolist()
+
+        if high_missing:
+            intuition = (
+                f"Columns {', '.join(high_missing)} have a lot of missing values (>20%). "
+                "They may need dropping or careful imputation."
+            )
+        elif moderate_missing:
+            intuition = (
+                f"Columns {', '.join(moderate_missing)} have moderate missingness (5–20%). Consider imputation."
+            )
+        else:
+            intuition = "Missing values exist but are relatively low; simple imputation may be sufficient."
+        show_plot_insight("Interpretation", intuition)
+
+        with st.expander("Click for mathematical interpretation"):
+            st.write("Missing values per column (counts and percent):")
+            for col, cnt in missing.items():
+                st.write(f"- `{col}`: {cnt} missing ({cnt/len(df):.2%})")
+
+    
 
 
 def dataset_not_available():
