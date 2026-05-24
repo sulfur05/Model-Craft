@@ -6,6 +6,17 @@ import seaborn as sns
 
 MAX_EDA_ROWS = 10_000
 
+#---------
+def _top_categorical_info(series: pd.Series) -> (str, float, int):
+    vc = series.value_counts(dropna=False)
+    if vc.empty:
+        return "no values", 0.0, 0
+    top = vc.index[0]
+    freq = int(vc.iloc[0])
+    share = float(freq / series.size)
+    unique = series.nunique(dropna=True)
+    return str(top), share, int(unique)
+
 def dataset_eda(df: pd.DataFrame, numeric_cols, categorical_cols):
 
     if len(df) > MAX_EDA_ROWS:
@@ -29,6 +40,22 @@ def dataset_eda(df: pd.DataFrame, numeric_cols, categorical_cols):
         st.dataframe(df[numeric_cols].describe().T)
     else:
         st.write("No numeric columns detected.")
+
+
+    #categorical columns summary
+    if categorical_cols:
+        st.markdown("**Categorical column value counts**")
+        cat_col = st.selectbox(
+            "Choose a categorical column to see its most common values",
+            options=categorical_cols,
+        )
+        vc = df[cat_col].value_counts(dropna=False).head(20)
+        st.write(vc)
+        top, share, unique = _top_categorical_info(df[cat_col])
+
+    
+
+
 
 def dataset_not_available():
     st.info("Upload a dataset in step 1 (Dataset Upload) first.")
