@@ -6,6 +6,9 @@ import seaborn as sns
 
 MAX_EDA_ROWS = 10_000
 
+def show_plot_insight(title: str, insight: str) -> None:
+    st.markdown(f"**{title}:** {insight}")
+
 #---------
 def _top_categorical_info(series: pd.Series) -> (str, float, int):
     vc = series.value_counts(dropna=False)
@@ -53,7 +56,22 @@ def dataset_eda(df: pd.DataFrame, numeric_cols, categorical_cols):
         st.write(vc)
         top, share, unique = _top_categorical_info(df[cat_col])
 
-    
+    #intuitive interpretation
+
+    if df[cat_col].size > 0:
+        if share > 0.75:
+            intuition = (
+                    f"Most rows ({share:.0%}) belong to '{top}'. The model may learn this category easily — "
+                    "but check for imbalance before training."
+                )
+        elif unique > 30:
+                intuition = (
+                    f"There are many different values ({unique}) in {cat_col}. Consider grouping rare values."
+                )
+        else:
+            intuition = f"Top category is '{top} ' ({share:.0%}). Watch for classimbalance."
+        
+        show_plot_insight("Interpretation",intuition)
 
 
 
