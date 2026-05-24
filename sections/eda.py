@@ -6,6 +6,20 @@ import seaborn as sns
 
 MAX_EDA_ROWS = 10_000
 
+def _skewness(arr: np.ndarray) -> float:
+    arr = arr[~np.isnan(arr)]
+    if arr.size == 0:
+        return 0.0
+    
+    m = arr.mean()
+    s = arr.std(ddof = 0)
+
+    if s == 0:
+        return 0.0
+
+    return float(((arr - m)**3).mean()/(s**3))
+
+
 def show_plot_insight(title: str, insight: str) -> None:
     st.markdown(f"**{title}:** {insight}")
 
@@ -116,6 +130,31 @@ def dataset_eda(df: pd.DataFrame, numeric_cols, categorical_cols):
             st.write("Missing values per column (counts and percent):")
             for col, cnt in missing.items():
                 st.write(f"- `{col}`: {cnt} missing ({cnt/len(df):.2%})")
+
+    #now for numeric distributions
+
+    if numeric_cols:
+        st.markdown("---")
+        st.subheader("Numeric distributions")
+
+        default_numeric = numeric_cols[:4]
+        selected_numeric = st.multiselect(
+            "Select numeric columns to plot."
+            options = numeric_cols,
+            default = default_numeric,
+        )
+
+        for col in selected_numeric:
+            arr = df_sample.dropna().to_numpy(dtype = float)
+            fig , ax = plt.subplots()
+            sns.histplot(arr, kde = True, ax = ax)
+            ax.set_title(f"Distribution of {col}")
+            st.pyplot(fig)
+
+            skew = _skewness(arr)
+            modality = _hist_modality(arr)
+
+
 
     
 
