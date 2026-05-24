@@ -19,6 +19,24 @@ def _skewness(arr: np.ndarray) -> float:
 
     return float(((arr - m)**3).mean()/(s**3))
 
+def _hist_modality(arr: np.ndarray, bins: int = 30) -> str:
+    arr = arr[~np.isnan(arr)]
+
+    if arr.size < 10:
+        return "insufficient data to judge modality"
+    counts, _ = np.histogram(arr, bins = bins)
+
+    peaks = 0
+
+    for i in range(1, len(counts) - 1):
+        if counts[i] > counts[i-1] and counts[i] > counts[i+1]:
+            peaks+=1
+    if peaks <= 1:
+        return "appears unimodal"
+    if peaks == 2:
+        return "may be bimodal"
+    return "appears multimodal"
+
 
 def show_plot_insight(title: str, insight: str) -> None:
     st.markdown(f"**{title}:** {insight}")
