@@ -271,3 +271,86 @@ def _run_model_comparison(task_type: str, model_names, config):
     st.session_state['model_comparison_results'] = results_df
 
  
+def model_training_section():
+    with st.expander("4. Model Training"):
+        st.subheader("Choose a model and train it")
+
+        config = _ensure_preprocessed_data()
+        if config is None:
+            return
+
+        task_type = st.session_state.get("task_type", "classification")
+        target_column = st.session_state.get("target_column", "target")
+
+        st.write(
+            f"You are solving a **{task_type}** problem to predict **{target_column}**. "
+            "Below, choose a model and (optionally) adjust its settings."
+        )
+
+        model_options = _get_model_options(task_type)
+        default_model_index = 0
+        selected_model = st.selectbox("Model", options=model_options, index=default_model_index)
+
+        params = {}
+        st.markdown("**Model hyperparameters (basic)**")
+        if task_type == "classification":
+            if selected_model == "Logistic Regression":
+                C = st.slider("Inverse regularization strength (C)", 0.01, 10.0, 1.0, 0.01)
+                max_iter = st.slider("Max iterations", 100, 2000, 500, 100)
+                params["C"] = C
+                params["max_iter"] = max_iter
+            elif selected_model in ["Random Forest Classifier", "XGBoost Classifier"]:
+                n_estimators = st.slider("Number of trees", 50, 500, 200, 50)
+                max_depth = st.slider("Max depth of trees (0 = unlimited)", 0, 30, 0, 1)
+                params["n_estimators"] = n_estimators
+                params["max_depth"] = max_depth or None
+                if selected_model == "XGBoost Classifier":
+                    learning_rate = st.slider("Learning rate", 0.01, 0.5, 0.1, 0.01)
+                    params["learning_rate"] = learning_rate
+        else:  # regression
+            if selected_model == "Linear Regression":
+                # No hyperparameters for basic LinearRegression
+                st.caption("Linear Regression has no key hyperparameters for this simple setup.")
+            elif selected_model == "Ridge Regression":
+                alpha = st.slider("Regularization strength (alpha)", 0.01, 10.0, 1.0, 0.01)
+                params["alpha"] = alpha
+            elif selected_model in ["Random Forest Regressor", "XGBoost Regressor"]:
+                n_estimators = st.slider("Number of trees", 50, 500, 200, 50)
+                max_depth = st.slider("Max depth of trees (0 = unlimited)", 0, 30, 0, 1)
+                params["n_estimators"] = n_estimators
+                params["max_depth"] = max_depth or None
+                if selected_model == "XGBoost Regressor":
+                    learning_rate = st.slider("Learning rate", 0.01, 0.5, 0.1, 0.01)
+                    params["learning_rate"] = learning_rate
+
+        if st.button("Train model"):
+            with st.spinner("Training model and evaluating on test data..."):
+                _train_and_evaluate(task_type, selected_model, config, params)
+            st.success("Training complete. See metrics and plots above.")
+            st.markdown("---")
+            st.subheader("Optional : compare models")
+
+            st.write(
+            "You can also train several models with basic settings and compare them "
+            "side by side. The best one will be marked as the active model."
+            )
+
+            compare_models = st.checkbox("Enable model comparison")
+
+            if compare_models:
+                compare_selection = st.multiselect(
+                    options = model_options,
+                    default = model_options,
+                    help = "All selected models will be trained with simple default settings",
+                )
+
+                metric_label = "accuracy" if task_type =='classification' else "R2"
+
+                st.caption(
+                    f"The Best model will be chosen based on {metric_label} on the test set"
+                )
+
+                if st.button("Run model comparison"):
+                    with st.spinner("Training and evaluating all selected models..."):
+                        _run_model_comparison(task_type, compare_selection, config)
+
