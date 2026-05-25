@@ -67,3 +67,50 @@ def _get_model_options(task_type: str):
         if HAS_XGBOOST:
             models.append("XGBoost Classifier")
     return models
+
+
+
+
+def _build_model(task_type: str, model_name: str, params: dict):
+    if task_type == "regression":
+        if model_name == "Linear Regression":
+            return LinearRegression()
+        if model_name == "Ridge Regression":
+            return Ridge(alpha=params.get("alpha", 1.0))
+        if model_name == "Random Forest Regressor":
+            return RandomForestRegressor(
+                n_estimators=params.get("n_estimators", 100),
+                max_depth=params.get("max_depth", None),
+                random_state=42,
+            )
+        if model_name == "XGBoost Regressor" and HAS_XGBOOST:
+            return XGBRegressor(
+                n_estimators=params.get("n_estimators", 200),
+                max_depth=params.get("max_depth", 6),
+                learning_rate=params.get("learning_rate", 0.1),
+                random_state=42,
+            )
+    else:
+        if model_name == "Logistic Regression":
+            return LogisticRegression(
+                max_iter=params.get("max_iter", 1000),
+                C=params.get("C", 1.0),
+                n_jobs=-1,
+            )
+        if model_name == "Random Forest Classifier":
+            return RandomForestClassifier(
+                n_estimators=params.get("n_estimators", 100),
+                max_depth=params.get("max_depth", None),
+                random_state=42,
+            )
+        if model_name == "XGBoost Classifier" and HAS_XGBOOST:
+            return XGBClassifier(
+                n_estimators=params.get("n_estimators", 200),
+                max_depth=params.get("max_depth", 6),
+                learning_rate=params.get("learning_rate", 0.1),
+                random_state=42,
+                use_label_encoder=False,
+                eval_metric="logloss",
+            )
+    raise ValueError(f"Unsupported model: {model_name}")
+
