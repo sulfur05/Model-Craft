@@ -168,3 +168,33 @@ def _show_classification_results(y_true, y_pred):
     ax.set_ylabel("True label")
     ax.set_title("Confusion matrix")
     st.pyplot(fig)
+
+
+def _show_regression_results(y_true, y_pred):
+    st.subheader("Evaluation metrics (regression)")
+
+    r2 = r2_score(y_true, y_pred)
+    mae = mean_absolute_error(y_true, y_pred)
+    mse = mean_squared_error(y_true, y_pred)
+    rmse = np.sqrt(mse)
+
+    st.write(f"R² (explained variance): **{r2:.3f}**")
+    st.write(f"MAE (mean absolute error): **{mae:.3f}**")
+    st.write(f"RMSE (root mean squared error): **{rmse:.3f}**")
+
+    st.caption(
+        "R² measures how much of the variation in the target is explained by the model. "
+        "Lower MAE/RMSE mean predictions are closer to the true values."
+    )
+
+    # Predicted vs actual scatter
+    fig, ax = plt.subplots()
+    ax.scatter(y_true, y_pred, alpha=0.6)
+    min_val = min(np.min(y_true), np.min(y_pred))
+    max_val = max(np.max(y_true), np.max(y_pred))
+    ax.plot([min_val, max_val], [min_val, max_val], "r--", label="Perfect prediction")
+    ax.set_xlabel("True values")
+    ax.set_ylabel("Predicted values")
+    ax.set_title("Predicted vs. true values")
+    ax.legend()
+    st.pyplot(fig)
