@@ -198,3 +198,76 @@ def _show_regression_results(y_true, y_pred):
     ax.set_title("Predicted vs. true values")
     ax.legend()
     st.pyplot(fig)
+
+def _run_model_comparison(task_type: str, model_names, config):
+    if not model_names:
+        st.warning("Please select at least one model compare")
+        return
+    
+    preprocessor = config['preprocessor']
+    X_train = config['X_train']
+    y_train = config['y_train']
+    X_test = config['X_test']
+    y_test = config['y_test']
+
+
+    X_train_proc = preprocessor.transform(X_train)
+    X_test_proc = preprocessor.transform(X_test)
+
+    rows = []
+    best_name = None
+    best_score = -np.inf
+    best_model = None
+
+    for name in model_names:
+        model = _build_model(task_type, name, params={})
+        model.fit(X_train_proc, y_train)
+        y_pred = model.predict(X_test_proc)
+
+
+        if task_type == 'classification':
+            acc = accuracy_score(y_test, y_pred)
+            f1 = f1_score(y_test, y_pred, average="weighted", zero_division=0)
+            row = {
+                "Model" : name,
+                "Accuracy" : acc,
+                "F1 (weighted)": f1,
+            }
+
+            score = acc
+        else:
+            r2 = r2_score(y_test, y_pred)
+            rmse = np.sqrt(mean_squared_error(y_test, y_pred))
+            row ={
+                "Model" : name,
+                "R2" : r2,
+                "RMSE": rmse,
+            }
+
+            score = r2
+        
+        rows.append(row)
+
+        if score>best_score:
+            best_score = score
+            best_name = name
+            best_model = model
+
+    results_df = pd.DataFrame(rows)
+
+
+    #try sorting now by main metriv
+    sort_col = "Accuracy" if task_type=="classification" else "R2"
+    results_df = results_df.sort_values(sort_col, ascending=False).reset_index(drop = True)
+
+    st.subheader("Model comparison results")
+    st.dataframe(results_df)
+
+    metric_name = "accuracy" if task_type == "classification" else "R2"
+    st.success(f"Best model based on {metric_name}:{best_name}({best_score:.3f})")
+
+    st.session_state['trained_model'] = best_model
+    st.session_state['trained_model_name'] = best_name
+    st.session_state['model_comparison_results'] = results_df
+
+ 
