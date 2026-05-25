@@ -137,3 +137,34 @@ def _train_and_evaluate(task_type: str, model_name: str, config, params: dict):
         _show_regression_results(y_test, y_pred)
     else:
         _show_classification_results(y_test, y_pred)
+
+
+
+def _show_classification_results(y_true, y_pred):
+    st.subheader("Evaluation metrics (classification)")
+
+    acc = accuracy_score(y_true, y_pred)
+    prec = precision_score(y_true, y_pred, average="weighted", zero_division=0)
+    rec = recall_score(y_true, y_pred, average="weighted", zero_division=0)
+    f1 = f1_score(y_true, y_pred, average="weighted", zero_division=0)
+
+    st.write(f"Accuracy: **{acc:.3f}**")
+    st.write(f"Precision (weighted): **{prec:.3f}**")
+    st.write(f"Recall (weighted): **{rec:.3f}**")
+    st.write(f"F1-score (weighted): **{f1:.3f}**")
+
+    st.caption(
+        "Accuracy is the overall fraction of correct predictions. "
+        "Precision, recall, and F1 take class balance into account."
+    )
+
+    # Confusion matrix
+    cm = confusion_matrix(y_true, y_pred)
+    labels = np.unique(y_true)
+
+    fig, ax = plt.subplots()
+    sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", xticklabels=labels, yticklabels=labels, ax=ax)
+    ax.set_xlabel("Predicted label")
+    ax.set_ylabel("True label")
+    ax.set_title("Confusion matrix")
+    st.pyplot(fig)
