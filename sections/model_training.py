@@ -113,4 +113,27 @@ def _build_model(task_type: str, model_name: str, params: dict):
                 eval_metric="logloss",
             )
     raise ValueError(f"Unsupported model: {model_name}")
+    
+def _train_and_evaluate(task_type: str, model_name: str, config, params: dict):
+    preprocessor = config["preprocessor"]
+    X_train = config["X_train"]
+    X_test = config["X_test"]
+    y_train = config["y_train"]
+    y_test = config["y_test"]
 
+    # Transform features using the preprocessing pipeline
+    X_train_proc = preprocessor.transform(X_train)
+    X_test_proc = preprocessor.transform(X_test)
+
+    model = _build_model(task_type, model_name, params)
+    model.fit(X_train_proc, y_train)
+
+    y_pred = model.predict(X_test_proc)
+
+    st.session_state["trained_model"] = model
+    st.session_state["trained_model_name"] = model_name
+
+    if task_type == "regression":
+        _show_regression_results(y_test, y_pred)
+    else:
+        _show_classification_results(y_test, y_pred)
