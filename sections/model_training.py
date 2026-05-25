@@ -49,3 +49,21 @@ def _ensure_preprocessed_data():
         "y_test": st.session_state["y_test"],
         "feature_columns": st.session_state["feature_columns"],
     }
+    
+def _get_model_options(task_type: str):
+    if task_type == "regression":
+        models = [
+            "Linear Regression",
+            "Ridge Regression",
+            "Random Forest Regressor",
+        ]
+        if HAS_XGBOOST:
+            models.append("XGBoost Regressor")
+    else:
+        models = [
+            "Logistic Regression",
+            "Random Forest Classifier",
+        ]
+        if HAS_XGBOOST:
+            models.append("XGBoost Classifier")
+    return models
